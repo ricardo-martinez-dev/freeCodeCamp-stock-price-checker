@@ -12,29 +12,24 @@ module.exports = function (app) {
     try {
       let { stock, like } = req.query;
       const userIP = anonymizeIP(req.ip);
-
-      // normalize stock input as an array
       const stocks = Array.isArray(stock) ? stock : [stock];
       const stockDataArr = [];
 
       for (let sym of stocks) {
         let stockDoc = await Stock.findOne({ symbol: sym.toUpperCase() });
-        if (!stockDoc) {
+        if (!stockDoc)
           stockDoc = await Stock.create({ symbol: sym.toUpperCase() });
-        }
 
-        // add like if user hasn't liked yet
         if (like === "true" && !stockDoc.ipHashes.includes(userIP)) {
           stockDoc.likes += 1;
           stockDoc.ipHashes.push(userIP);
           await stockDoc.save();
         }
 
-        // fetch price from proxy
         const apiRes = await axios.get(
           `https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/${sym}/quote`
         );
-        const price = apiRes.data.latestPrice;
+        const price = Number(apiRes.data.latestPrice);
 
         stockDataArr.push({
           stock: sym.toUpperCase(),
@@ -43,7 +38,7 @@ module.exports = function (app) {
         });
       }
 
-      // handle 2-stock relative likes
+      // Two stock relative likes
       if (stockDataArr.length === 2) {
         const rel_likes = [
           stockDataArr[0].likes - stockDataArr[1].likes,
@@ -65,8 +60,14 @@ module.exports = function (app) {
         });
       }
 
-      // single stock response
-      res.json({ stockData: stockDataArr[0] });
+      // Single stock response
+      res.json({
+        stockData: {
+          stock: stockDataArr[0].stock,
+          price: stockDataArr[0].price,
+          likes: stockDataArr[0].likes,
+        },
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Server error" });
